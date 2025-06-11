@@ -20,7 +20,7 @@ MODEL:
   data_list: ['cremiA.tif']
   folder_name: ''
   stride: [8, 40, 40]
-  model_pth: 'selection.ckpt'
+  model_pth: 'selection_model.ckpt'
 
 CGS:
   patch_num: 15
