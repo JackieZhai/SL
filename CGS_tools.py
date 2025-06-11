@@ -45,10 +45,10 @@ class ProviderValid(Dataset):
         self.crop_size = cfg.MODEL.crop_size
         self.out_size = cfg.MODEL.out_size
         self.stride = cfg.MODEL.stride
-        self.dataset_names = cfg.data_list
-        self.data_folder = cfg.folder_name
+        self.dataset_names = cfg.MODEL.data_list
+        self.data_folder = cfg.MODEL.folder_name
 
-        print(f"Validation dataset: {cfg.DATA.dataset_name}")
+        print(f"Validation dataset: {self.data_folder}")
 
         # Load all volumes
         self.datasets = []
