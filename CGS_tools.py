@@ -48,7 +48,7 @@ class ProviderValid(Dataset):
         self.dataset_names = cfg.MODEL.data_list
         self.data_folder = cfg.MODEL.folder_name
 
-        print(f"Validation dataset: {self.data_folder}")
+        print(f"Validation dataset:", self.data_folder, self.dataset_names)
 
         # Load all volumes
         self.datasets = []
