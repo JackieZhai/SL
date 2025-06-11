@@ -1,0 +1,29 @@
+NAME: 'SL'
+
+MODEL:
+  model_type: 'superhuman'
+  input_nc: 1
+  output_nc: 1
+  if_sigmoid: True
+  init_mode_mala: 'kaiming'
+  if_skip: 'False'
+  filters: [28, 36, 48, 64, 80]
+  upsample_mode: 'transposeS'
+  decode_ratio: 1
+  merge_mode: 'cat'
+  pad_mode: 'zero'
+  bn_mode: 'async'
+  relu_mode: 'elu'
+  init_mode: 'kaiming_normal'
+  crop_size: [18, 160, 160]
+  out_size: [18, 160, 160]
+  data_list: ['cremiA.tif']
+  folder_name: ''
+  stride: [8, 40, 40]
+  model_pth: 'selection.ckpt'
+
+CGS:
+  patch_num: 15
+  n_neighbors_list: [30, 40, 50]
+  window_size: [1, 1, 1]
+  point_cloud_size: [12, 23, 23]
