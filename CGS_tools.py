@@ -2,7 +2,7 @@ import pandas as pd
 import yaml
 import torch
 from tqdm import tqdm
-from attrdict import AttrDict
+from addict import Dict as AttrDict
 from collections import OrderedDict
 from model.encoder import UNet_PNI_encoder
 import os
