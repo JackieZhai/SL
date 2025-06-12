@@ -6,7 +6,6 @@ import warnings
 def main():
     """Main execution function."""
     warnings.filterwarnings("ignore")
-    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
     # -------- Argument Parsing --------
     parser = argparse.ArgumentParser(description="Superhuman Model Inference with CGS Patch Selection")

@@ -135,15 +135,14 @@ class ProviderValid(Dataset):
         if end_x > self.padded_shape[2]:
             start_x = self.padded_shape[2] - self.crop_size[2]
             end_x = self.padded_shape[2]
+        pos = [start_z, start_y, start_x]
         
-        self.pos = [start_z, start_y, start_x]
-
         # Extract and normalize the patch
         volume = self.datasets[volume_idx]
         patch = volume[start_z:end_z, start_y:end_y, start_x:end_x].copy()
         patch = patch.astype(np.float32) / 255.0
         patch = patch[np.newaxis, ...]  # Add channel dimension
-        return np.ascontiguousarray(patch, dtype=np.float32)
+        return np.ascontiguousarray(patch, dtype=np.float32), np.array(pos, dtype=np.int32)
 
 def load_config(cfg_name):
     """Load configuration file as an AttrDict object."""
@@ -186,14 +185,20 @@ def run_inference(model, val_loader, provider, device):
     print(f'Running inference on {len(provider)} sub-volumes...')
     pbar = tqdm(total=len(provider), desc='Extracting Features')
 
-    for data in val_loader:
+    # for data in val_loader:
+    #     inputs = data.to(device, non_blocking=True)
+    #     with torch.no_grad():
+    #         outputs = model(inputs)
+    #         features.append(outputs.cpu().numpy())
+    #         positions.append(np.array(provider.pos))
+    #     pbar.update(1)
+    for data, pos in val_loader:
         inputs = data.to(device, non_blocking=True)
         with torch.no_grad():
             outputs = model(inputs)
             features.append(outputs.cpu().numpy())
-            positions.append(np.array(provider.pos))
+            positions.append(pos.numpy())
         pbar.update(1)
-
     pbar.close()
     return np.concatenate(features, axis=0), np.array(positions)
 
