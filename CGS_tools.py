@@ -135,6 +135,8 @@ class ProviderValid(Dataset):
         if end_x > self.padded_shape[2]:
             start_x = self.padded_shape[2] - self.crop_size[2]
             end_x = self.padded_shape[2]
+        
+        self.pos = [start_z, start_y, start_x]
 
         # Extract and normalize the patch
         volume = self.datasets[volume_idx]
