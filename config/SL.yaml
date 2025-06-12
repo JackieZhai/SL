@@ -18,7 +18,7 @@ MODEL:
   crop_size: [18, 160, 160]
   out_size: [18, 160, 160]
   data_list: ['cremiA.tif']
-  folder_name: ''
+  folder_name: 'data'
   stride: [8, 40, 40]
   model_pth: 'selection_model.ckpt'
 
