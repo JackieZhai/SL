@@ -90,7 +90,7 @@ class ProviderValid(Dataset):
 
         self.padded_shape = list(self.datasets[0].shape)
         self.patches_per_volume = self.num_z * self.num_y * self.num_x
-        print(self.num_z, self.num_y, self.num_x)
+        print(f"Patch numbers at z, y, x-axis per volume:", self.num_z, self.num_y, self.num_x)
         self.total_patches = self.patches_per_volume * len(self.datasets)
 
     def __len__(self):
