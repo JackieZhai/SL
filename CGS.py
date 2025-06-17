@@ -14,7 +14,7 @@ def main():
 
     # -------- Load Config & Device --------
     cfg = load_config(args.cfg)
-    device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # -------- Load Model --------
     checkpoint_path = cfg.MODEL.model_pth
@@ -26,7 +26,7 @@ def main():
 
     # -------- Inference --------
     features, positions = run_inference(model, val_loader, valid_provider, device)
-    out_path = '/data1/share/SCN/zhangyc/CGS-tools/output'
+    out_path = './output'
     np.save(os.path.join(out_path, 'features.npy'), features)
     np.save(os.path.join(out_path, 'position.npy'), positions)
 
