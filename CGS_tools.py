@@ -59,7 +59,7 @@ class ProviderValid(Dataset):
             print(f"Loading {name} ...")
             try:
                 with h5py.File(path, 'r') as f:
-                    data = f['main'][:][:100]
+                    data = f['volumes']['raw'][:][:100]
             except Exception:
                 data = imageio.volread(path)[:100]
             print(f"Loaded shape: {data.shape}")
