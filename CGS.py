@@ -14,7 +14,7 @@ def main():
 
     # -------- Load Config & Device --------
     cfg = load_config(args.cfg)
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
 
     # -------- Load Model --------
     checkpoint_path = cfg.MODEL.model_pth
@@ -22,20 +22,33 @@ def main():
 
     # -------- Load Validation Data --------
     valid_provider = ProviderValid(cfg)
-    val_loader = torch.utils.data.DataLoader(valid_provider, batch_size=1, shuffle=False, num_workers=4)
+    val_loader = torch.utils.data.DataLoader(valid_provider, batch_size=1, shuffle=False, num_workers=0)
 
     # -------- Inference --------
     features, positions = run_inference(model, val_loader, valid_provider, device)
+    out_path = '/data1/share/SCN/zhangyc/CGS-tools/output'
+    np.save(os.path.join(out_path, 'features.npy'), features)
+    np.save(os.path.join(out_path, 'position.npy'), positions)
 
+    # out_path = './output'
+    # features = np.load(os.path.join(out_path, 'features.npy'))
+    # positions = np.load(os.path.join(out_path, 'position.npy'))
+    # print(features.shape, positions.shape)
     # -------- CGS Parameters --------
-    patch_num = cfg.CGS.patch_num
+    subvolume_num = cfg.CGS.subvolume_num
     n_neighbors_list = cfg.CGS.n_neighbors_list
     window_size = cfg.CGS.window_size
-    point_cloud_size = cfg.CGS.point_cloud_size
+    point_cloud_size = [valid_provider.num_z, valid_provider.num_y, valid_provider.num_x]
 
     # -------- CGS Patch Selection --------
-    save_results(n_neighbors_list, patch_num, features, positions, window_size, point_cloud_size)
+    save_results(n_neighbors_list, subvolume_num, features, positions, window_size, point_cloud_size)
+    
+    # save subvolume
+    stride = cfg.MODEL.stride
+    patch_size = cfg.MODEL.crop_size
+    volume = valid_provider.datasets[0]
 
+    extract_subvolume(cfg, window_size, stride, patch_size, volume)
 
 if __name__ == "__main__":
     main()

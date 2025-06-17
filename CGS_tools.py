@@ -11,6 +11,8 @@ import h5py
 import imageio
 import numpy as np
 from torch.utils.data import Dataset
+import umap
+import matplotlib.pyplot as plt
 
 
 def compute_padding_and_num(size: int, patch_size: int, stride: int):
@@ -57,9 +59,9 @@ class ProviderValid(Dataset):
             print(f"Loading {name} ...")
             try:
                 with h5py.File(path, 'r') as f:
-                    data = f['main'][:]
+                    data = f['main'][:][:100]
             except Exception:
-                data = imageio.volread(path)
+                data = imageio.volread(path)[:100]
             print(f"Loaded shape: {data.shape}")
             self.datasets.append(data)
 
@@ -80,14 +82,15 @@ class ProviderValid(Dataset):
 
         # Apply symmetric reflection padding
         pad_width = (
-            (self.padding_z, self.padding_z),
-            (self.padding_y, self.padding_y),
-            (self.padding_x, self.padding_x),
+            (0, 2 * self.padding_z),
+            (0, 2 * self.padding_y),
+            (0, 2 * self.padding_x),
         )
         self.datasets = [np.pad(d, pad_width, mode='reflect') for d in self.datasets]
 
         self.padded_shape = list(self.datasets[0].shape)
         self.patches_per_volume = self.num_z * self.num_y * self.num_x
+        print(self.num_z, self.num_y, self.num_x)
         self.total_patches = self.patches_per_volume * len(self.datasets)
 
     def __len__(self):
@@ -135,14 +138,15 @@ class ProviderValid(Dataset):
         if end_x > self.padded_shape[2]:
             start_x = self.padded_shape[2] - self.crop_size[2]
             end_x = self.padded_shape[2]
+
         pos = [start_z, start_y, start_x]
-        
         # Extract and normalize the patch
         volume = self.datasets[volume_idx]
         patch = volume[start_z:end_z, start_y:end_y, start_x:end_x].copy()
         patch = patch.astype(np.float32) / 255.0
         patch = patch[np.newaxis, ...]  # Add channel dimension
         return np.ascontiguousarray(patch, dtype=np.float32), np.array(pos, dtype=np.int32)
+
 
 def load_config(cfg_name):
     """Load configuration file as an AttrDict object."""
@@ -185,13 +189,6 @@ def run_inference(model, val_loader, provider, device):
     print(f'Running inference on {len(provider)} sub-volumes...')
     pbar = tqdm(total=len(provider), desc='Extracting Features')
 
-    # for data in val_loader:
-    #     inputs = data.to(device, non_blocking=True)
-    #     with torch.no_grad():
-    #         outputs = model(inputs)
-    #         features.append(outputs.cpu().numpy())
-    #         positions.append(np.array(provider.pos))
-    #     pbar.update(1)
     for data, pos in val_loader:
         inputs = data.to(device, non_blocking=True)
         with torch.no_grad():
@@ -203,18 +200,21 @@ def run_inference(model, val_loader, provider, device):
     return np.concatenate(features, axis=0), np.array(positions)
 
 
-def save_results(n_neighbors_list, patch_num, features, positions, window_size, point_cloud_size):
+def save_results(n_neighbors_list, subvolume_num, features, positions, window_size, point_cloud_size):
     """Perform CGS patch selection and save results."""
     print('Computing pairwise distances...')
     dist_matrix_soft = euclidean_distances(features, features)
     os.makedirs('./record', exist_ok=True)
-
+    print('UMAP Projection...')
+    reducer = umap.UMAP(random_state=40)
+    x_dr = reducer.fit_transform(features)
+    umap1, umap2 = x_dr[:][:, 0], x_dr[:][:, 1]
     for n_neighbors in n_neighbors_list:
-        print(f'\nSelecting patches with {n_neighbors} neighbors...')
+        print(f'\nSelecting subvolumes with {n_neighbors} neighbors...')
         dist_matrix = make_hard(dist_matrix_soft, n_neighbors)
         already_selected = []
 
-        for iteration in range(patch_num):
+        for iteration in range(subvolume_num):
             best_score = -1
             best_patch = []
             best_positions = []
@@ -234,10 +234,12 @@ def save_results(n_neighbors_list, patch_num, features, positions, window_size, 
                             best_positions = candidate_pos
 
             already_selected += best_patch
+            umap_subv(umap1, umap2, features, already_selected, dist_matrix, n_neighbors, iteration)
             np.save(f'./record/list_{n_neighbors}_{iteration}.npy', best_patch)
             np.save(f'./record/position_{n_neighbors}_{iteration}.npy', best_positions)
-            np.save(f'./record/score_{n_neighbors}_{iteration}.npy', best_score)
-            print(f'Saved patch {iteration + 1}/{patch_num} | Score: {best_score:.4f}')
+            print(f'Saved subvolume {iteration + 1}/{subvolume_num} | Score: {best_score:.4f}')
+
+
 def Get_List_Max_Index(list_, n):
     N_large = pd.DataFrame({'score': list_}).sort_values(by='score', ascending=[False])
     return list(N_large.index)[:n], sum(list(N_large.score)[:n])
@@ -274,6 +276,16 @@ def get_score(label_list, dist_matrix):
     return len(covered_set)
 
 
+def get_cover_list(label_list, n_neighbors, dist_matrix):
+    covered_list = []
+    for sample in label_list:
+        a, b = Get_List_Max_Index(-dist_matrix[sample], n_neighbors)
+        sub_coverlist = a
+        covered_list += sub_coverlist
+    covered_set = list(set(covered_list))
+    return covered_set
+
+
 def make_hard(dist_matrix, n_neighbors):
     hard_list = []
     for index in range(dist_matrix.shape[0]):
@@ -304,3 +316,46 @@ def notoverlap(start_list, already_list):
             return False
     return True
 
+
+def extract_subvolume(cfg, window_size, stride, patch_size, volume):
+    n_neighbors_list = cfg.CGS.n_neighbors_list
+    # print(n_neighbors_list)
+    for n_neighbors in n_neighbors_list:
+        for iteration in range(cfg.CGS.subvolume_num):
+            print('saving..')
+            position_list = np.load(f'./record/position_{n_neighbors}_{iteration}.npy')
+            subvol_size = [stride[i] * (window_size[i] - 1) + patch_size[i] for i in range(3)]
+            z, y, x = position_list[0][0]
+            subvolume = volume[z:z + subvol_size[0], y:y + subvol_size[1], x:x + subvol_size[2]]
+            imageio.volwrite(f'./record/subvolume_{n_neighbors}_{iteration}.tif', subvolume)
+
+
+def umap_subv(x1, x2, features, select_list, dist_matrix, n_neighbors, iteration):
+    cover_list = get_cover_list(select_list, n_neighbors, dist_matrix)
+    x1_e = []
+    x2_e = []
+    plt.figure()
+    for k in range(features.shape[0]):
+        if (k not in select_list) and (k not in cover_list):
+            x1_e.append(x1[k])
+            x2_e.append(x2[k])
+
+    plt.scatter(x1_e, x2_e, color='deepskyblue', s=3, label='Others')
+    x1_c = []
+    x2_c = []
+    for j in range(features.shape[0]):
+        if (j not in select_list) and (j in cover_list):
+            x1_c.append(x1[j])
+            x2_c.append(x2[j])
+    plt.scatter(x1_c, x2_c, color='orange', marker='x', s=6, label='Covered vector')
+    x1_s = []
+    x2_s = []
+    for i in range(features.shape[0]):
+        if (i in select_list):
+            x1_s.append(x1[i])
+            x2_s.append(x2[i])
+    plt.scatter(x1_s, x2_s, color='red', marker='*', s=6, label='Selected vector')
+    plt.xlabel('UMAP 1')
+    plt.ylabel('UMAP 2')
+    plt.savefig(f'./record/umap_{n_neighbors}_{iteration}')
+    plt.show(block=True)
